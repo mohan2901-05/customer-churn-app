@@ -10,20 +10,37 @@ import warnings
 
 warnings.filterwarnings("ignore")  # hide future warnings
 
-# Load model, scaler, and feature names
+st.set_page_config(page_title="Customer Churn Prediction", layout="wide")
+st.title("📊 Customer Churn Prediction App")
+
+# ---------------------------
+# Step 1: Load ML model, scaler, features
+# ---------------------------
 model = joblib.load("churn_model.pkl")
 scaler = joblib.load("scaler.pkl")
 features = joblib.load("features.pkl")
 
-# Load dataset for EDA
-df = pd.read_csv("C:/Users/mohan/Downloads/projects/ML projects/customer churn pred/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+# ---------------------------
+# Step 2: Load dataset for EDA
+# ---------------------------
+# Support Cloud & local
+uploaded_file_eda = st.file_uploader("Upload CSV for EDA (optional)", type=["csv"], key="eda_uploader")
+if uploaded_file_eda:
+    df = pd.read_csv(uploaded_file_eda)
+else:
+    try:
+        df = pd.read_csv("WA_Fn-UseC_-Telco-Customer-Churn.csv")  # local fallback
+    except FileNotFoundError:
+        st.warning("Please upload the CSV file for EDA to proceed.")
+        st.stop()
+
+# Preprocess
 df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
 df["TotalCharges"] = df["TotalCharges"].fillna(df["TotalCharges"].median())
 
-st.set_page_config(page_title="Customer Churn Prediction", layout="wide")
-st.title("📊 Customer Churn Prediction App")
-
-# Tabs: EDA and Prediction
+# ---------------------------
+# Step 3: Tabs
+# ---------------------------
 tab1, tab2 = st.tabs(["📈 EDA Dashboard", "🔮 Prediction"])
 
 # ---------------------------
@@ -65,11 +82,11 @@ with tab2:
     st.header("Customer Churn Prediction")
     st.sidebar.header("Customer Information")
 
-    # Upload CSV for batch prediction
-    uploaded_file = st.sidebar.file_uploader("Upload CSV for batch prediction", type=["csv"])
-
-    if uploaded_file:
-        df_batch = pd.read_csv(uploaded_file)
+    # --- Batch prediction via CSV ---
+    uploaded_file_batch = st.sidebar.file_uploader("Upload CSV for batch prediction", type=["csv"], key="batch_uploader")
+    
+    if uploaded_file_batch:
+        df_batch = pd.read_csv(uploaded_file_batch)
 
         # Preprocess batch
         df_batch["TotalCharges"] = pd.to_numeric(df_batch["TotalCharges"], errors="coerce").fillna(0)
@@ -104,15 +121,15 @@ with tab2:
         )
 
     else:
-        # Manual single-customer prediction
-        gender = st.sidebar.selectbox("Gender", ["Female", "Male"])
-        senior = st.sidebar.selectbox("Senior Citizen", [0, 1])
-        partner = st.sidebar.selectbox("Partner", ["Yes", "No"])
-        dependents = st.sidebar.selectbox("Dependents", ["Yes", "No"])
-        tenure = st.sidebar.number_input("Tenure (months)", min_value=0, max_value=72, value=12)
-        contract = st.sidebar.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
-        monthly_charges = st.sidebar.number_input("Monthly Charges", min_value=0.0, value=70.0)
-        total_charges = st.sidebar.number_input("Total Charges", min_value=0.0, value=800.0)
+        # --- Manual single-customer prediction ---
+        gender = st.sidebar.selectbox("Gender", ["Female", "Male"], key="gender")
+        senior = st.sidebar.selectbox("Senior Citizen", [0, 1], key="senior")
+        partner = st.sidebar.selectbox("Partner", ["Yes", "No"], key="partner")
+        dependents = st.sidebar.selectbox("Dependents", ["Yes", "No"], key="dependents")
+        tenure = st.sidebar.number_input("Tenure (months)", min_value=0, max_value=72, value=12, key="tenure")
+        contract = st.sidebar.selectbox("Contract", ["Month-to-month", "One year", "Two year"], key="contract")
+        monthly_charges = st.sidebar.number_input("Monthly Charges", min_value=0.0, value=70.0, key="monthly")
+        total_charges = st.sidebar.number_input("Total Charges", min_value=0.0, value=800.0, key="total")
 
         # Prepare input
         input_data = pd.DataFrame({
@@ -133,7 +150,7 @@ with tab2:
 
         input_scaled = scaler.transform(input_data)
 
-        if st.sidebar.button("🔍 Predict Churn"):
+        if st.sidebar.button("🔍 Predict Churn", key="predict_btn"):
             prediction = model.predict(input_scaled)[0]
             probability = model.predict_proba(input_scaled)[0][1]
 
