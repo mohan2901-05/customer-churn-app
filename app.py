@@ -23,7 +23,6 @@ features = joblib.load("features.pkl")
 # ---------------------------
 # Step 2: Load dataset for EDA
 # ---------------------------
-# Support Cloud & local
 uploaded_file_eda = st.file_uploader("Upload CSV for EDA (optional)", type=["csv"], key="eda_uploader")
 if uploaded_file_eda:
     df = pd.read_csv(uploaded_file_eda)
@@ -35,8 +34,9 @@ else:
         st.stop()
 
 # Preprocess
-df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
-df["TotalCharges"] = df["TotalCharges"].fillna(df["TotalCharges"].median())
+if "TotalCharges" in df.columns:
+    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    df["TotalCharges"] = df["TotalCharges"].fillna(df["TotalCharges"].median())
 
 # ---------------------------
 # Step 3: Tabs
@@ -44,36 +44,61 @@ df["TotalCharges"] = df["TotalCharges"].fillna(df["TotalCharges"].median())
 tab1, tab2 = st.tabs(["📈 EDA Dashboard", "🔮 Prediction"])
 
 # ---------------------------
-# TAB 1: EDA Dashboard
+# TAB 1: EDA Dashboard (Cloud-safe)
 # ---------------------------
 with tab1:
     st.header("Exploratory Data Analysis (EDA)")
     st.write("Insights from the churn dataset:")
 
-    # Churn distribution
-    st.subheader("Churn Distribution")
-    fig, ax = plt.subplots()
-    sns.countplot(x="Churn", data=df, ax=ax)
-    st.pyplot(fig)
+    # Ensure dataset is not empty
+    if df.empty:
+        st.error("❌ Dataset is empty. Please upload a valid CSV for EDA.")
+        st.stop()
 
-    # Churn by contract type
-    st.subheader("Churn by Contract Type")
-    fig, ax = plt.subplots()
-    sns.countplot(x="Contract", hue="Churn", data=df, palette="Set2", ax=ax)
-    st.pyplot(fig)
+    st.write("Columns in dataset:", df.columns.tolist())
+    st.write("Preview of dataset:")
+    st.dataframe(df.head())
+
+    # Ensure 'Churn' column exists
+    if "Churn" not in df.columns:
+        st.error("❌ 'Churn' column not found. Please upload a CSV with this column.")
+    else:
+        df["Churn"] = df["Churn"].astype(str)
+
+        # Churn distribution
+        st.subheader("Churn Distribution")
+        fig, ax = plt.subplots()
+        sns.countplot(x="Churn", data=df[df["Churn"].notna()], ax=ax)
+        st.pyplot(fig)
+
+    # Churn by Contract Type
+    if "Contract" in df.columns and "Churn" in df.columns:
+        st.subheader("Churn by Contract Type")
+        fig, ax = plt.subplots()
+        sns.countplot(x="Contract", hue="Churn", data=df.dropna(subset=["Contract", "Churn"]), palette="Set2", ax=ax)
+        st.pyplot(fig)
+    else:
+        st.warning("⚠️ 'Contract' or 'Churn' column missing. Skipping this plot.")
 
     # Distribution of Monthly Charges
-    st.subheader("Distribution of Monthly Charges")
-    fig, ax = plt.subplots()
-    sns.histplot(df["MonthlyCharges"], bins=30, kde=True, ax=ax)
-    st.pyplot(fig)
+    if "MonthlyCharges" in df.columns:
+        st.subheader("Distribution of Monthly Charges")
+        fig, ax = plt.subplots()
+        sns.histplot(df["MonthlyCharges"].dropna(), bins=30, kde=True, ax=ax)
+        st.pyplot(fig)
+    else:
+        st.warning("⚠️ 'MonthlyCharges' column missing. Skipping this plot.")
 
     # Correlation heatmap
-    st.subheader("Correlation Heatmap")
-    corr = df.corr(numeric_only=True)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.heatmap(corr, cmap="coolwarm", ax=ax)
-    st.pyplot(fig)
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    if len(numeric_cols) > 0:
+        st.subheader("Correlation Heatmap")
+        corr = df[numeric_cols].corr()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.heatmap(corr, cmap="coolwarm", ax=ax)
+        st.pyplot(fig)
+    else:
+        st.warning("⚠️ No numeric columns found for correlation heatmap.")
 
 # ---------------------------
 # TAB 2: Prediction
@@ -89,11 +114,16 @@ with tab2:
         df_batch = pd.read_csv(uploaded_file_batch)
 
         # Preprocess batch
-        df_batch["TotalCharges"] = pd.to_numeric(df_batch["TotalCharges"], errors="coerce").fillna(0)
-        df_batch["gender"] = df_batch["gender"].map({"Female": 0, "Male": 1})
-        df_batch["Partner"] = df_batch["Partner"].map({"Yes": 1, "No": 0})
-        df_batch["Dependents"] = df_batch["Dependents"].map({"Yes": 1, "No": 0})
-        df_batch["Contract"] = df_batch["Contract"].map({"Month-to-month": 0, "One year": 1, "Two year": 2})
+        if "TotalCharges" in df_batch.columns:
+            df_batch["TotalCharges"] = pd.to_numeric(df_batch["TotalCharges"], errors="coerce").fillna(0)
+        if "gender" in df_batch.columns:
+            df_batch["gender"] = df_batch["gender"].map({"Female": 0, "Male": 1})
+        if "Partner" in df_batch.columns:
+            df_batch["Partner"] = df_batch["Partner"].map({"Yes": 1, "No": 0})
+        if "Dependents" in df_batch.columns:
+            df_batch["Dependents"] = df_batch["Dependents"].map({"Yes": 1, "No": 0})
+        if "Contract" in df_batch.columns:
+            df_batch["Contract"] = df_batch["Contract"].map({"Month-to-month": 0, "One year": 1, "Two year": 2})
 
         # Fill missing features
         for col in features:
